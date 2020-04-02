@@ -17,6 +17,7 @@ CocosCreator mqant client 简单使用说明
         }
     });
 ```
+<<<<<<< HEAD:readme.md
 
 添加持久监听模式.使用onProxy统一注册协议
 
@@ -26,3 +27,8 @@ CocosCreator mqant client 简单使用说明
 
 已在小游戏环境和模拟器环境测试通过!!!!
 
+=======
+然后就可以愉快使用了
+
+已在小游戏环境和模拟器环境测试通过!!!!
+>>>>>>> 40d6071c8fbac4e1b781670c5e278a5068709143:README.md
