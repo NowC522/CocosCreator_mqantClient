@@ -1,8 +1,10 @@
 import { HashMap } from "./hashMap"
-import { mqantFun } from "./mqantFun"
+import { IProxyHandler } from "./IProxyHandler"
+import { JsonMessage, ICodec } from "./message"
 
-export class mqantClient {
-    private waiting_queue: HashMap<mqantFun> = null
+export class mqant {
+    private waiting_queue: HashMap<IProxyHandler> = null
+    private proxy_queue: HashMap<IProxyHandler> = null
     private context: any = null
     private curr_id: number = 0
     private client: Paho.MQTT.Client = null
@@ -12,7 +14,9 @@ export class mqantClient {
     private reconnectcallback: Function = null
     constructor() {
         this.waiting_queue = new HashMap
+        this.proxy_queue = new HashMap
     }
+
 
     public init(prop: ClientProp, context: any = null): void {
         this.connectcallback = prop.connect;
@@ -50,12 +54,30 @@ export class mqantClient {
     private onMessageArrived(message: Paho.MQTT.Message): void {
         try {
             let fun = this.waiting_queue.find(message.destinationName)
-            if (fun != null) {
-                let h = message.destinationName.split("/")
-                if (h.length > 2) {
-                    this.waiting_queue.remove(message.destinationName)
+            let h = message.destinationName.split("/")
+            if (this.waiting_queue.has(message.destinationName)) {
+                this.waiting_queue.remove(message.destinationName)
+            } else {
+                h.splice(h.length - 1, 1)
+                let newTopic = h.join("/")
+                let p = this.proxy_queue.find(newTopic)
+                let msg = new JsonMessage(message.payloadString)
+                msg.parser()
+                if (msg.error != "") {
+                    p.onError(this, msg.error)
+                } else {
+                    p.onMessage(this, msg.result)
                 }
-                fun.fun.call(fun.context, message.destinationName, message.payloadString)
+                return
+            }
+            if (fun != null) {
+                let msg = new JsonMessage(message.payloadString)
+                msg.parser()
+                if (msg.error != "") {
+                    fun.onError(this, msg.error)
+                } else {
+                    fun.onMessage(this, msg.result)
+                }
             }
         } catch (e) {
             console.log(e)
@@ -110,22 +132,29 @@ export class mqantClient {
         return false
     }
     /**
-     * 向服务器发送一条消息
+     * 向服务器发送一条消息,并且消息只监听一次.使用后会被删除
      * @param topic
      * @param msg
-     * @param callback
+     * @param proxy
      */
 
-    request(topic: string, msg: any, callback: any, callbackContext?: any): void {
+    requestOnce(topic: string, msg: any, proxy: IProxyHandler = null): void {
         this.curr_id += 1
         topic = `${topic}/${this.curr_id}`
         let payLoad = JSON.stringify(msg)
-        this.on(topic, callback, callbackContext)
+        this.on(topic, proxy)
         this.client.publish(topic, payLoad, 0, false)
     }
 
+    request(topic: string, msg: any): void {
+        this.curr_id += 1
+        topic = `${topic}/${this.curr_id}`
+        let payLoad = JSON.stringify(msg)
+        this.client.publish(topic, payLoad, 0, false)
+    }
     /**
     * 向服务器发送一条消息,但不要求服务器返回结果
+    * 注意,如果有注册Proxy 模式. 还是会收到消息
     * @param topic
     * @param msg
     */
@@ -138,13 +167,32 @@ export class mqantClient {
      * @param topic
      * @param callback
      */
-    on(topic: string, callback: Function, callbackContext: any) {
-        //服务器不会返回结果
-        if (callbackContext === null) {
-            callbackContext = this;
+    on(topic: string, proxy: IProxyHandler) {
+        if (proxy == null) {
+            return
         }
+        //服务器不会返回结果
         this.waiting_queue.remove(topic);
-        this.waiting_queue.add(topic, new mqantFun(callback, callbackContext)) //添加这条消息到等待队列
+        this.waiting_queue.add(topic, proxy) //添加这条消息到等待队列
+
+    }
+
+    onProxy(topic: string, proxy: IProxyHandler) {
+        this.proxy_queue.add(topic, proxy)
+    }
+
+    /**
+     * 取消某个代理
+     */
+
+    offProxy(topic: string): void {
+        if (this.proxy_queue.has(topic)) {
+            this.proxy_queue.remove(topic)
+        }
+    }
+
+    clearProxy(): void {
+        this.proxy_queue.clear();
     }
 
     clearCallback(): void {
@@ -153,6 +201,7 @@ export class mqantClient {
     destroy() {
         this.client.disconnect();
         this.waiting_queue.clear();
+        this.proxy_queue.clear()
     }
     parseUTF8(payload): string {
         if (typeof payload === "string")

@@ -9,7 +9,7 @@ export class HashMap<V> {
      */
 
     public add(topic: string, cb: V): void {
-        if (this.handlers[topic]) {
+        if (!this.handlers[topic]) {
             this.handlers[topic] = cb
             this.len++
         }
