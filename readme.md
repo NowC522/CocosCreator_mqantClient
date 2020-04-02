@@ -1,7 +1,8 @@
-CocosCreator mqant client 简单使用说明,
-导入项目后,paho-mqtt 设置为插件. 
+###CocosCreator mqant client 简单使用说明
 
-//初始化连接后
+###导入项目后,paho-mqtt 设置为插件
+初始化连接后
+```typescript
     mqant = new mqant()
     this.mqant.init({
         host: host,
@@ -15,6 +16,6 @@ CocosCreator mqant client 简单使用说明,
             console.log(reason)
         }
     });
-就可以愉快使用了
-
+	```
+然后就可以愉快使用了
 已在小游戏环境和模拟器环境测试通过!!!!
